@@ -7,6 +7,7 @@ import 'package:tarombo/config/router/routes.dart';
 import 'package:tarombo/features/family_tree/models/family_graph.dart';
 import 'package:tarombo/features/family_tree/providers/family_tree_provider.dart';
 import 'package:tarombo/config/constants.dart';
+import 'package:tarombo/features/family_tree/providers/relationship_provider.dart';
 import 'package:tarombo/widgets/error_widget.dart';
 import 'package:tarombo/widgets/loading_widget.dart';
 
@@ -30,8 +31,8 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
   @override
   void initState() {
     super.initState();
-    generationsUp = 2;
-    generationsDown = 2;
+    generationsUp = 4; // Increase upward generations (ancestors)
+    generationsDown = 3; // Increase downward generations (descendants)
     _transformerController = TransformationController();
   }
 
@@ -89,6 +90,25 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
       ),
     ));
 
+    final relationshipsAsync =
+        personId != null ? ref.watch(allRelationshipsProvider(personId)) : null;
+
+    Map<int, String> _buildRelationshipMap(
+        List<Map<String, dynamic>> relationships) {
+      final map = <int, String>{};
+
+      for (final relation in relationships) {
+        final personId = relation['person']['id'] as int;
+        final term = relation['term'] as String?;
+
+        if (term != null) {
+          map[personId] = term;
+        }
+      }
+
+      return map;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Silsilah Keluarga'),
@@ -110,7 +130,22 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
         ],
       ),
       body: familyGraphAsync.when(
-        data: (familyGraph) => _buildFamilyTree(context, familyGraph),
+        data: (familyGraph) {
+          // Handle different relationship states
+          if (relationshipsAsync == null) {
+            // No logged-in user or no relationships available
+            return _buildFamilyTree(context, familyGraph, {});
+          }
+
+          return relationshipsAsync.when(
+            data: (relationships) {
+              final relationshipMap = _buildRelationshipMap(relationships);
+              return _buildFamilyTree(context, familyGraph, relationshipMap);
+            },
+            loading: () => _buildFamilyTree(context, familyGraph, {}),
+            error: (_, __) => _buildFamilyTree(context, familyGraph, {}),
+          );
+        },
         error: (error, stackTrace) => CustomErrorWidget(
           message: 'Gagal memuat data silsilah',
           error: error.toString(),
@@ -163,7 +198,8 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
     );
   }
 
-  Widget _buildFamilyTree(BuildContext context, FamilyGraph familyGraph) {
+  Widget _buildFamilyTree(BuildContext context, FamilyGraph familyGraph,
+      Map<int, String> relationshipMap) {
     // Create graph instance
     final Graph graph = Graph()..isTree = true;
     final Map<int, Node> nodeMap = {};
@@ -181,16 +217,40 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
       final targetNode = nodeMap[graphEdge.target];
 
       if (sourceNode != null && targetNode != null) {
-        graph.addEdge(sourceNode, targetNode);
+        final relationshipType = graphEdge.data.relationshipType;
+
+        // Style edges based on relationship type
+        final paint = Paint()
+          ..strokeWidth = 1
+          ..style = PaintingStyle.stroke;
+
+        // Parent-child relationships
+        if (relationshipType == "father" || relationshipType == "mother") {
+          paint.color = Colors.blue;
+          graph.addEdge(sourceNode, targetNode, paint: paint);
+        }
+        // Spouse relationships
+        else if (relationshipType == "spouse") {
+          paint.color = Colors.red;
+          paint.strokeWidth = 2;
+          graph.addEdge(sourceNode, targetNode, paint: paint);
+        }
+        // Default for other relationships
+        else {
+          paint.color = Colors.black;
+          graph.addEdge(sourceNode, targetNode, paint: paint);
+        }
       }
     }
 
     // Configure the layout algorithm
     final builder = BuchheimWalkerConfiguration()
-      ..siblingSeparation = 100
+      ..siblingSeparation =
+          200 // Increase sibling spacing for spouse visualization
       ..levelSeparation = 150
-      ..subtreeSeparation = 150
-      ..orientation = BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM;
+      ..subtreeSeparation = 200 // Increase subtree separation
+      ..orientation = BuchheimWalkerConfiguration
+          .ORIENTATION_LEFT_RIGHT; // Try horizontal layout
 
     return InteractiveViewer(
       transformationController: _transformerController,
@@ -210,20 +270,26 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
           final nodeId = int.parse(node.key!.value.toString());
           final graphNode = familyGraph.nodes.firstWhere((n) => n.id == nodeId);
 
-          return _buildPersonNode(
-              context, graphNode, familyGraph.centralPersonId == nodeId);
+          return _buildPersonNode(context, graphNode,
+              familyGraph.centralPersonId == nodeId, relationshipMap);
         },
       ),
     );
   }
 
-  Widget _buildPersonNode(
-      BuildContext context, GraphNode node, bool isCentral) {
+  Widget _buildPersonNode(BuildContext context, GraphNode node, bool isCentral,
+      Map<int, String> relationshipMap) {
     // Add null safety to gender check
-    final gender = node.data.gender ?? 'unknown';
-    final Color nodeColor =
-        gender == 'male' ? Colors.blue.shade100 : Colors.pink.shade100;
+    final gender = (node.data.gender ?? '').toLowerCase();
+    final Color nodeColor = gender == 'male'
+        ? Colors.blue.shade100
+        : (gender == 'female' ? Colors.pink.shade100 : Colors.grey.shade200);
     final Color borderColor = isCentral ? Colors.red : Colors.grey;
+
+    print(
+        "Rendering node: id=${node.id}, name=${node.label}, gender=$gender, color=${nodeColor}");
+
+    final relationshipTerm = relationshipMap[node.id];
 
     return GestureDetector(
       onTap: () {
@@ -276,6 +342,18 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
               ),
               textAlign: TextAlign.center,
             ),
+            if (relationshipTerm != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                relationshipTerm,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.indigo,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
             if (isCentral)
               const Icon(Icons.star, color: Colors.amber, size: 16),
           ],

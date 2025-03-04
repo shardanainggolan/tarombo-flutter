@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tarombo/features/family_tree/providers/family_tree_provider.dart';
 import 'package:tarombo/features/family_tree/providers/relationship_provider.dart';
 import 'package:tarombo/widgets/error_widget.dart';
@@ -143,10 +144,12 @@ class RelationshipScreen extends ConsumerWidget {
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {
                     // Navigate to person detail
-                    Navigator.pushNamed(
-                      context,
-                      '/person/${person['id']}',
-                    );
+                    // Navigator.pushNamed(
+                    //   context,
+                    //   '/person/${person['id']}',
+                    // );
+
+                    GoRouter.of(context).go('/person/${person['id']}');
                   },
                 );
               },

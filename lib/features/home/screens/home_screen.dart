@@ -137,7 +137,9 @@ class DashboardPage extends ConsumerWidget {
                   Icons.search,
                   Colors.orange,
                   () {
-                    Navigator.pushNamed(context, AppRoutes.search);
+                    // Navigator.pushNamed(context, AppRoutes.search);
+
+                    GoRouter.of(context).go(AppRoutes.search);
                   },
                 ),
                 _buildFeatureCard(

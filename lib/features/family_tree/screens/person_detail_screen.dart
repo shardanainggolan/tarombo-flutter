@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:tarombo/features/family_tree/models/person.dart';
 import 'package:tarombo/features/family_tree/providers/family_tree_provider.dart';
@@ -43,11 +44,13 @@ class PersonDetailScreen extends ConsumerWidget {
             icon: const Icon(Icons.family_restroom),
             onPressed: () {
               // Navigate to family tree centered on this person
-              Navigator.pushNamed(
-                context,
-                '/family-tree',
-                arguments: {'personId': personId},
-              );
+              // Navigator.pushNamed(
+              //   context,
+              //   '/family-tree',
+              //   arguments: {'personId': personId},
+              // );
+
+              context.push('/family-tree', extra: {'personId': personId});
             },
           ),
         ],

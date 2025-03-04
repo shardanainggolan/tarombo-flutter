@@ -29,7 +29,8 @@ class FamilyRepository {
 
     try {
       final response = await _apiClient.get(
-        AppConstants.familyGraphEndpoint,
+        // AppConstants.familyGraphEndpoint,
+        AppConstants.familyTreeEndpoint,
         queryParameters: queryParams,
       );
 
@@ -37,33 +38,38 @@ class FamilyRepository {
         final data = response.data['data'];
         final meta = response.data['meta'];
 
-        // Use the adapter instead of direct fromJson conversion
+        // Debug first node structure
+        print("Sample node from API: ${data['nodes'][0]}");
+
+        // Debug first node after transformation
+        final firstNode = FamilyGraphAdapter.nodeFromJson(data['nodes'][0]);
+        print(
+            "Transformed node: id=${firstNode.id}, label=${firstNode.label}, gender=${firstNode.data.gender}");
+
+        // Transform nodes
+        final nodes = (data['nodes'] as List?)
+                ?.map((node) => FamilyGraphAdapter.nodeFromJson(node))
+                .toList() ??
+            [];
+
+        // Transform relationships to edges
+        final edges = (data['relationships'] as List?)
+                ?.map((relationship) =>
+                    FamilyGraphAdapter.relationshipToEdge(relationship))
+                .toList() ??
+            [];
+
         return FamilyGraph(
-          nodes: (data['nodes'] as List?)
-                  ?.map((node) => FamilyGraphAdapter.nodeFromJson(node))
-                  .toList() ??
-              [],
-          edges: (data['edges'] as List?)
-                  ?.map((edge) => FamilyGraphAdapter.edgeFromJson(edge))
-                  .toList() ??
-              [],
+          nodes: nodes,
+          edges: edges,
           centralPersonId: meta['central_person_id'] ?? 0,
         );
       } else {
         throw Exception('Failed to get family graph');
       }
     } catch (e, stack) {
-      // Enhanced error diagnostics
       print('Error fetching family graph: $e');
       print('Stack trace: $stack');
-
-      // Attempt to identify problematic nodes if applicable
-      if (e
-          .toString()
-          .contains('type \'Null\' is not a subtype of type \'String\'')) {
-        _logNodeIssuesFromLastResponse();
-      }
-
       rethrow;
     }
   }
