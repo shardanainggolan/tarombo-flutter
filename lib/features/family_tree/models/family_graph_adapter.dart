@@ -3,18 +3,14 @@ import 'package:tarombo/features/family_tree/models/family_graph.dart';
 class FamilyGraphAdapter {
   // Safe node conversion with null handling
   static GraphNode nodeFromJson(Map<String, dynamic> json) {
-    // API response has flat structure, not nested 'data'
-    final fullName =
-        "${json['first_name'] ?? ''} ${json['last_name'] ?? ''}".trim();
-
     return GraphNode(
       id: json['id'] ?? 0,
-      label: fullName.isNotEmpty ? fullName : 'Unknown',
+      label: "${json['first_name'] ?? ''} ${json['last_name'] ?? ''}",
       data: GraphNodeData(
-        fullName: fullName.isNotEmpty ? fullName : 'Unknown',
+        fullName: "${json['first_name'] ?? ''} ${json['last_name'] ?? ''}",
         gender: json['gender']?.toString() ?? 'unknown',
         marga: json['marga_name']?.toString() ?? '',
-        isCentral: false, // This will be set correctly elsewhere
+        isCentral: false, // Will be set based on central_person_id
       ),
     );
   }

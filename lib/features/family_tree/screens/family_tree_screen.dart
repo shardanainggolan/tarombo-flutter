@@ -10,6 +10,7 @@ import 'package:tarombo/config/constants.dart';
 import 'package:tarombo/features/family_tree/providers/relationship_provider.dart';
 import 'package:tarombo/widgets/error_widget.dart';
 import 'package:tarombo/widgets/loading_widget.dart';
+import 'package:tarombo/features/family_tree/widgets/custom_family_tree.dart';
 
 class FamilyTreeScreen extends ConsumerStatefulWidget {
   final int? personId;
@@ -71,7 +72,6 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
               ElevatedButton(
                 onPressed: () {
                   // Navigate to search screen to find and link person
-                  // Navigator.pushNamed(context, AppRoutes.search);
                 },
                 child: const Text('Cari Data Diri'),
               ),
@@ -131,19 +131,10 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
       ),
       body: familyGraphAsync.when(
         data: (familyGraph) {
-          // Handle different relationship states
-          if (relationshipsAsync == null) {
-            // No logged-in user or no relationships available
-            return _buildFamilyTree(context, familyGraph, {});
-          }
-
-          return relationshipsAsync.when(
-            data: (relationships) {
-              final relationshipMap = _buildRelationshipMap(relationships);
-              return _buildFamilyTree(context, familyGraph, relationshipMap);
-            },
-            loading: () => _buildFamilyTree(context, familyGraph, {}),
-            error: (_, __) => _buildFamilyTree(context, familyGraph, {}),
+          return CustomFamilyTree(
+            familyGraph: familyGraph,
+            transformController: _transformerController,
+            centralPersonId: personId!,
           );
         },
         error: (error, stackTrace) => CustomErrorWidget(
@@ -162,6 +153,19 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          FloatingActionButton.small(
+            heroTag: 'refresh',
+            onPressed: () {
+              ref.refresh(familyGraphProvider(
+                FamilyGraphParams(
+                  personId: personId,
+                  generationsUp: generationsUp,
+                  generationsDown: generationsDown,
+                ),
+              ));
+            },
+            child: const Icon(Icons.refresh),
+          ),
           FloatingActionButton.small(
             heroTag: 'zoom_in',
             onPressed: () {

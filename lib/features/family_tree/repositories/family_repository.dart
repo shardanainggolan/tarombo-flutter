@@ -29,7 +29,6 @@ class FamilyRepository {
 
     try {
       final response = await _apiClient.get(
-        // AppConstants.familyGraphEndpoint,
         AppConstants.familyTreeEndpoint,
         queryParameters: queryParams,
       );
@@ -37,19 +36,17 @@ class FamilyRepository {
       if (response.statusCode == 200 && response.data['success']) {
         final data = response.data['data'];
         final meta = response.data['meta'];
-
-        // Debug first node structure
-        print("Sample node from API: ${data['nodes'][0]}");
-
-        // Debug first node after transformation
-        final firstNode = FamilyGraphAdapter.nodeFromJson(data['nodes'][0]);
-        print(
-            "Transformed node: id=${firstNode.id}, label=${firstNode.label}, gender=${firstNode.data.gender}");
+        final centralPersonId = meta['central_person_id'] ?? 0;
 
         // Transform nodes
-        final nodes = (data['nodes'] as List?)
-                ?.map((node) => FamilyGraphAdapter.nodeFromJson(node))
-                .toList() ??
+        final nodes = (data['nodes'] as List?)?.map((node) {
+              final graphNode = FamilyGraphAdapter.nodeFromJson(node);
+
+              // Set isCentral flag based on central_person_id
+              return graphNode.copyWith(
+                  data: graphNode.data
+                      .copyWith(isCentral: graphNode.id == centralPersonId));
+            }).toList() ??
             [];
 
         // Transform relationships to edges
@@ -59,10 +56,11 @@ class FamilyRepository {
                 .toList() ??
             [];
 
+        // Create FamilyGraph instance
         return FamilyGraph(
           nodes: nodes,
           edges: edges,
-          centralPersonId: meta['central_person_id'] ?? 0,
+          centralPersonId: centralPersonId,
         );
       } else {
         throw Exception('Failed to get family graph');
