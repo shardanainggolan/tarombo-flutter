@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:graphview/GraphView.dart';
-import 'package:tarombo/config/router/routes.dart';
-import 'package:tarombo/features/family_tree/models/family_graph.dart';
 import 'package:tarombo/features/family_tree/providers/family_tree_provider.dart';
-import 'package:tarombo/config/constants.dart';
-import 'package:tarombo/features/family_tree/providers/relationship_provider.dart';
+import 'package:tarombo/features/family_tree/widgets/unified_family_tree.dart'; // Import the new widget
 import 'package:tarombo/widgets/error_widget.dart';
 import 'package:tarombo/widgets/loading_widget.dart';
-import 'package:tarombo/features/family_tree/widgets/custom_family_tree.dart';
+import 'package:tarombo/config/constants.dart';
 
 class FamilyTreeScreen extends ConsumerStatefulWidget {
   final int? personId;
@@ -32,8 +26,8 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
   @override
   void initState() {
     super.initState();
-    generationsUp = 4; // Increase upward generations (ancestors)
-    generationsDown = 3; // Increase downward generations (descendants)
+    generationsUp = 5; // Increased to show more ancestors
+    generationsDown = 3; // Show children and grandchildren
     _transformerController = TransformationController();
   }
 
@@ -81,7 +75,7 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
       );
     }
 
-    // Watch the family graph data
+    // Watch the family graph data with increased generations
     final familyGraphAsync = ref.watch(familyGraphProvider(
       FamilyGraphParams(
         personId: personId,
@@ -89,25 +83,6 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
         generationsDown: generationsDown,
       ),
     ));
-
-    final relationshipsAsync =
-        personId != null ? ref.watch(allRelationshipsProvider(personId)) : null;
-
-    Map<int, String> _buildRelationshipMap(
-        List<Map<String, dynamic>> relationships) {
-      final map = <int, String>{};
-
-      for (final relation in relationships) {
-        final personId = relation['person']['id'] as int;
-        final term = relation['term'] as String?;
-
-        if (term != null) {
-          map[personId] = term;
-        }
-      }
-
-      return map;
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -117,24 +92,37 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
             icon: const Icon(Icons.search),
             onPressed: () {
               // Navigate to search screen
-              // Navigator.pushNamed(context, AppRoutes.search);
             },
           ),
           IconButton(
             icon: const Icon(Icons.people),
             onPressed: () {
               // Navigate to relationships screen
-              // Navigator.pushNamed(context, AppRoutes.relationship);
+            },
+          ),
+          // Add manual refresh button
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              // Force refresh of the family graph data
+              ref.refresh(familyGraphProvider(
+                FamilyGraphParams(
+                  personId: personId,
+                  generationsUp: generationsUp,
+                  generationsDown: generationsDown,
+                ),
+              ));
             },
           ),
         ],
       ),
       body: familyGraphAsync.when(
         data: (familyGraph) {
-          return CustomFamilyTree(
+          // Use the new unified family tree widget
+          return UnifiedFamilyTree(
             familyGraph: familyGraph,
             transformController: _transformerController,
-            centralPersonId: personId!,
+            centralPersonId: personId,
           );
         },
         error: (error, stackTrace) => CustomErrorWidget(
@@ -154,22 +142,10 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           FloatingActionButton.small(
-            heroTag: 'refresh',
-            onPressed: () {
-              ref.refresh(familyGraphProvider(
-                FamilyGraphParams(
-                  personId: personId,
-                  generationsUp: generationsUp,
-                  generationsDown: generationsDown,
-                ),
-              ));
-            },
-            child: const Icon(Icons.refresh),
-          ),
-          FloatingActionButton.small(
             heroTag: 'zoom_in',
             onPressed: () {
-              _transformerController.value = Matrix4.identity()..scale(1.1);
+              _transformerController.value = _transformerController.value
+                ..scale(1.1);
             },
             child: const Icon(Icons.zoom_in),
           ),
@@ -177,7 +153,8 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
           FloatingActionButton.small(
             heroTag: 'zoom_out',
             onPressed: () {
-              _transformerController.value = Matrix4.identity()..scale(0.9);
+              _transformerController.value = _transformerController.value
+                ..scale(0.9);
             },
             child: const Icon(Icons.zoom_out),
           ),
@@ -198,170 +175,6 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
             child: const Icon(Icons.settings),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildFamilyTree(BuildContext context, FamilyGraph familyGraph,
-      Map<int, String> relationshipMap) {
-    // Create graph instance
-    final Graph graph = Graph()..isTree = true;
-    final Map<int, Node> nodeMap = {};
-
-    // Create nodes
-    for (final graphNode in familyGraph.nodes) {
-      final node = Node.Id(graphNode.id);
-      nodeMap[graphNode.id] = node;
-      graph.addNode(node);
-    }
-
-    // Create edges
-    for (final graphEdge in familyGraph.edges) {
-      final sourceNode = nodeMap[graphEdge.source];
-      final targetNode = nodeMap[graphEdge.target];
-
-      if (sourceNode != null && targetNode != null) {
-        final relationshipType = graphEdge.data.relationshipType;
-
-        // Style edges based on relationship type
-        final paint = Paint()
-          ..strokeWidth = 1
-          ..style = PaintingStyle.stroke;
-
-        // Parent-child relationships
-        if (relationshipType == "father" || relationshipType == "mother") {
-          paint.color = Colors.blue;
-          graph.addEdge(sourceNode, targetNode, paint: paint);
-        }
-        // Spouse relationships
-        else if (relationshipType == "spouse") {
-          paint.color = Colors.red;
-          paint.strokeWidth = 2;
-          graph.addEdge(sourceNode, targetNode, paint: paint);
-        }
-        // Default for other relationships
-        else {
-          paint.color = Colors.black;
-          graph.addEdge(sourceNode, targetNode, paint: paint);
-        }
-      }
-    }
-
-    // Configure the layout algorithm
-    final builder = BuchheimWalkerConfiguration()
-      ..siblingSeparation =
-          200 // Increase sibling spacing for spouse visualization
-      ..levelSeparation = 150
-      ..subtreeSeparation = 200 // Increase subtree separation
-      ..orientation = BuchheimWalkerConfiguration
-          .ORIENTATION_LEFT_RIGHT; // Try horizontal layout
-
-    return InteractiveViewer(
-      transformationController: _transformerController,
-      constrained: false,
-      boundaryMargin: const EdgeInsets.all(double.infinity),
-      minScale: 0.1,
-      maxScale: 2.0,
-      child: GraphView(
-        graph: graph,
-        algorithm: BuchheimWalkerAlgorithm(builder, TreeEdgeRenderer(builder)),
-        paint: Paint()
-          ..color = Colors.black
-          ..strokeWidth = 1
-          ..style = PaintingStyle.stroke,
-        builder: (Node node) {
-          // Get node data
-          final nodeId = int.parse(node.key!.value.toString());
-          final graphNode = familyGraph.nodes.firstWhere((n) => n.id == nodeId);
-
-          return _buildPersonNode(context, graphNode,
-              familyGraph.centralPersonId == nodeId, relationshipMap);
-        },
-      ),
-    );
-  }
-
-  Widget _buildPersonNode(BuildContext context, GraphNode node, bool isCentral,
-      Map<int, String> relationshipMap) {
-    // Add null safety to gender check
-    final gender = (node.data.gender ?? '').toLowerCase();
-    final Color nodeColor = gender == 'male'
-        ? Colors.blue.shade100
-        : (gender == 'female' ? Colors.pink.shade100 : Colors.grey.shade200);
-    final Color borderColor = isCentral ? Colors.red : Colors.grey;
-
-    print(
-        "Rendering node: id=${node.id}, name=${node.label}, gender=$gender, color=${nodeColor}");
-
-    final relationshipTerm = relationshipMap[node.id];
-
-    return GestureDetector(
-      onTap: () {
-        // Navigator.pushNamed(
-        //   context,
-        //   '/person/${node.id}',
-        // );
-
-        GoRouter.of(context).go('/person/${node.id}');
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: nodeColor,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: borderColor,
-            width: isCentral ? 3 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 3,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        constraints: const BoxConstraints(
-          minWidth: 100,
-          maxWidth: 150,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              node.label ?? 'Unknown', // Add null check
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              node.data.marga ?? '', // Add null check
-              style: const TextStyle(
-                fontSize: 12,
-                fontStyle: FontStyle.italic,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            if (relationshipTerm != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                relationshipTerm,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.indigo,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-            if (isCentral)
-              const Icon(Icons.star, color: Colors.amber, size: 16),
-          ],
-        ),
       ),
     );
   }
@@ -390,6 +203,16 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
                     setState(() {
                       generationsUp = value!;
                     });
+
+                    // Refresh with new value
+                    ref.refresh(familyGraphProvider(
+                      FamilyGraphParams(
+                        personId: widget.personId ??
+                            ref.read(currentPersonIdProvider),
+                        generationsUp: generationsUp,
+                        generationsDown: generationsDown,
+                      ),
+                    ));
                   },
                 ),
               ],
@@ -411,6 +234,16 @@ class _FamilyTreeScreenState extends ConsumerState<FamilyTreeScreen> {
                     setState(() {
                       generationsDown = value!;
                     });
+
+                    // Refresh with new value
+                    ref.refresh(familyGraphProvider(
+                      FamilyGraphParams(
+                        personId: widget.personId ??
+                            ref.read(currentPersonIdProvider),
+                        generationsUp: generationsUp,
+                        generationsDown: generationsDown,
+                      ),
+                    ));
                   },
                 ),
               ],

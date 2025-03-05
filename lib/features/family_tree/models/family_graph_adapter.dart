@@ -10,18 +10,19 @@ class FamilyGraphAdapter {
         fullName: "${json['first_name'] ?? ''} ${json['last_name'] ?? ''}",
         gender: json['gender']?.toString() ?? 'unknown',
         marga: json['marga_name']?.toString() ?? '',
-        isCentral: false, // Will be set based on central_person_id
+        isCentral: false, // Will be set later based on central_person_id
       ),
     );
   }
 
-  static GraphEdge relationshipToEdge(Map<String, dynamic> relationship) {
+  // Convert relationship to edge
+  static GraphEdge relationshipToEdge(Map<String, dynamic> json) {
     return GraphEdge(
-      source: relationship['from'] ?? 0,
-      target: relationship['to'] ?? 0,
-      label: relationship['type']?.toString() ?? '',
+      source: json['from'] ?? 0,
+      target: json['to'] ?? 0,
+      label: json['type']?.toString() ?? '',
       data: GraphEdgeData(
-        relationshipType: relationship['type']?.toString() ?? 'unknown',
+        relationshipType: json['type']?.toString() ?? 'unknown',
       ),
     );
   }

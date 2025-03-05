@@ -25,13 +25,12 @@ class CustomFamilyTree extends ConsumerWidget {
         ref.watch(allRelationshipsProvider(centralPersonId));
 
     final familyUnits = _processFamilyUnits(familyGraph);
-    final generationMap = _organizeByGeneration(familyUnits);
+    final generationMap = _organizeByGeneration(familyUnits, familyGraph);
 
-    // Create a map of relationship terms based on person IDs
+    // Create relationship terms map
     Map<int, String> relationshipTerms = {};
 
     if (relationshipsAsync.value != null) {
-      // Extract relationship terms from the API response
       for (final relationship in relationshipsAsync.value!) {
         final personId = relationship['person']['id'] as int?;
         final term = relationship['term'] as String?;
@@ -41,6 +40,12 @@ class CustomFamilyTree extends ConsumerWidget {
         }
       }
     }
+
+    // Add logging to help debug
+    print(
+        "Found ${familyUnits.length} family units across ${generationMap.length} generations");
+    print("Top-most generation: ${generationMap.keys.reduce(math.min)}");
+    print("Bottom-most generation: ${generationMap.keys.reduce(math.max)}");
 
     return InteractiveViewer(
       transformationController: transformController,
@@ -194,93 +199,193 @@ class CustomFamilyTree extends ConsumerWidget {
     }
   }
 
-  Map<int, List<FamilyUnit>> _organizeByGeneration(List<FamilyUnit> units) {
-    final Map<int, List<FamilyUnit>> generationMap = {};
-    final Map<int, int> generationAssignments = {};
+  Map<int, Set<int>> _buildFamilyNetwork(FamilyGraph familyGraph) {
+    // Create bidirectional network map
+    final Map<int, Set<int>> familyNetwork = {};
 
-    // Create parent-child relationship maps for generation assignment
-    final Map<int, int> childToParent = {};
-    final Map<int, List<int>> personToUnits = {};
+    // Initialize network for all nodes
+    for (final node in familyGraph.nodes) {
+      familyNetwork[node.id] = {};
+    }
 
-    // Map people to family units and build relationship map
-    for (int i = 0; i < units.length; i++) {
-      final unit = units[i];
-      final personId = unit.primaryPerson.id;
-
-      // Map this person to their unit index
-      personToUnits.putIfAbsent(personId, () => []).add(i);
-
-      // Record parent-child relationships
-      for (final child in unit.children) {
-        childToParent[child.id] = personId;
+    // Add all relationships to network
+    for (final edge in familyGraph.edges) {
+      // Skip marriage edges for now - they're handled separately
+      if (edge.data.relationshipType != 'spouse') {
+        familyNetwork[edge.source]!.add(edge.target);
+        familyNetwork[edge.target]!.add(edge.source);
       }
     }
 
-    // Find the central person's generation number
-    int centralPersonId = familyGraph.centralPersonId;
-    int centralPersonGeneration = 0;
+    return familyNetwork;
+  }
 
-    // Account for generations above central person
-    int tempPerson = centralPersonId;
-    while (childToParent.containsKey(tempPerson)) {
-      centralPersonGeneration++;
-      tempPerson = childToParent[tempPerson]!;
+  int _findTopAncestor(int startPersonId, FamilyGraph familyGraph) {
+    // Map child to parent
+    Map<int, int> childToParent = {};
+
+    for (final edge in familyGraph.edges) {
+      if (edge.data.relationshipType == 'father' ||
+          edge.data.relationshipType == 'mother') {
+        childToParent[edge.target] = edge.source;
+      }
     }
 
-    // Assign generation 0 to top-level ancestor
-    generationAssignments[tempPerson] = 0;
+    // Traverse up to find highest ancestor
+    int currentPerson = startPersonId;
+    while (childToParent.containsKey(currentPerson)) {
+      currentPerson = childToParent[currentPerson]!;
+    }
 
-    // Assign generations to all family members
-    bool changed = true;
-    while (changed) {
-      changed = false;
+    return currentPerson;
+  }
 
-      for (int i = 0; i < units.length; i++) {
-        final unit = units[i];
-        final personId = unit.primaryPerson.id;
+  List<FamilyUnit> _buildConnectedFamilyTree(FamilyGraph familyGraph) {
+    // Find top ancestor starting from central person
+    final topAncestorId =
+        _findTopAncestor(familyGraph.centralPersonId, familyGraph);
 
-        // If person has assigned generation
-        if (generationAssignments.containsKey(personId)) {
-          final personGen = generationAssignments[personId]!;
+    // Create parent-child maps
+    final Map<int, List<int>> parentToChildren = {};
+    final Map<int, int> childToParent = {};
+    final Map<int, List<int>> personToSpouses = {};
 
-          // Assign spouse to same generation
-          for (final spouse in unit.spouses) {
-            if (!generationAssignments.containsKey(spouse.id) ||
-                generationAssignments[spouse.id] != personGen) {
-              generationAssignments[spouse.id] = personGen;
-              changed = true;
-            }
-          }
+    // Process all relationships
+    for (final edge in familyGraph.edges) {
+      if (edge.data.relationshipType == 'father' ||
+          edge.data.relationshipType == 'mother') {
+        parentToChildren.putIfAbsent(edge.source, () => []).add(edge.target);
+        childToParent[edge.target] = edge.source;
+      } else if (edge.data.relationshipType == 'spouse') {
+        personToSpouses.putIfAbsent(edge.source, () => []).add(edge.target);
+        personToSpouses.putIfAbsent(edge.target, () => []).add(edge.source);
+      }
+    }
 
+    // Build family units top-down
+    final List<FamilyUnit> units = [];
+    final Set<int> processedPersons = {};
+
+    // Start recursive processing from top ancestor
+    _processPersonAndDescendants(topAncestorId, familyGraph, parentToChildren,
+        personToSpouses, units, processedPersons);
+
+    return units;
+  }
+
+  void _processPersonAndDescendants(
+      int personId,
+      FamilyGraph familyGraph,
+      Map<int, List<int>> parentToChildren,
+      Map<int, List<int>> personToSpouses,
+      List<FamilyUnit> units,
+      Set<int> processedPersons) {
+    // Skip if already processed
+    if (processedPersons.contains(personId)) return;
+    processedPersons.add(personId);
+
+    // Find person node
+    final personNode = familyGraph.nodes.firstWhere(
+      (n) => n.id == personId,
+      orElse: () => throw Exception('Person node not found: $personId'),
+    );
+
+    // Get spouses
+    final spouseIds = personToSpouses[personId] ?? [];
+    final spouseNodes = <GraphNode>[];
+
+    for (final spouseId in spouseIds) {
+      if (!processedPersons.contains(spouseId)) {
+        final spouseNode = familyGraph.nodes.firstWhere(
+          (n) => n.id == spouseId,
+          orElse: () => throw Exception('Spouse node not found: $spouseId'),
+        );
+        spouseNodes.add(spouseNode);
+        processedPersons.add(spouseId);
+      }
+    }
+
+    // Get children
+    final childrenIds = parentToChildren[personId] ?? [];
+    final childNodes = <GraphNode>[];
+
+    for (final childId in childrenIds) {
+      final childNode = familyGraph.nodes.firstWhere(
+        (n) => n.id == childId,
+        orElse: () => throw Exception('Child node not found: $childId'),
+      );
+      childNodes.add(childNode);
+    }
+
+    // Create family unit
+    units.add(FamilyUnit(
+      primaryPerson: personNode,
+      spouses: spouseNodes,
+      children: childNodes,
+    ));
+
+    // Process all children
+    for (final childId in childrenIds) {
+      _processPersonAndDescendants(childId, familyGraph, parentToChildren,
+          personToSpouses, units, processedPersons);
+    }
+  }
+
+  Map<int, List<FamilyUnit>> _organizeByGeneration(
+      List<FamilyUnit> units, FamilyGraph familyGraph) {
+    final Map<int, List<FamilyUnit>> generationMap = {};
+    final Map<int, int> generationAssignments = {};
+
+    // Create child-parent map
+    final Map<int, int> childToParent = {};
+
+    // Build relationship maps
+    for (final unit in units) {
+      for (final child in unit.children) {
+        childToParent[child.id] = unit.primaryPerson.id;
+      }
+    }
+
+    // Find top ancestor (person with no parents)
+    int topAncestorId =
+        _findTopAncestor(familyGraph.centralPersonId, familyGraph);
+
+    // Assign generation 0 to top ancestor
+    generationAssignments[topAncestorId] = 0;
+
+    // Perform breadth-first traversal to assign generations
+    final List<int> queue = [topAncestorId];
+    final Set<int> processed = {topAncestorId};
+
+    while (queue.isNotEmpty) {
+      final personId = queue.removeAt(0);
+      final generation = generationAssignments[personId]!;
+
+      // Find direct children
+      for (final unit in units) {
+        if (unit.primaryPerson.id == personId) {
           // Assign children to next generation
           for (final child in unit.children) {
-            if (!generationAssignments.containsKey(child.id) ||
-                generationAssignments[child.id] != personGen + 1) {
-              generationAssignments[child.id] = personGen + 1;
-              changed = true;
+            if (!processed.contains(child.id)) {
+              generationAssignments[child.id] = generation + 1;
+              queue.add(child.id);
+              processed.add(child.id);
             }
           }
 
-          // Assign parent to previous generation
-          if (childToParent.containsKey(personId)) {
-            final parentId = childToParent[personId]!;
-            if (!generationAssignments.containsKey(parentId) ||
-                generationAssignments[parentId] != personGen - 1) {
-              generationAssignments[parentId] = personGen - 1;
-              changed = true;
+          // Assign spouses to same generation
+          for (final spouse in unit.spouses) {
+            if (!processed.contains(spouse.id)) {
+              generationAssignments[spouse.id] = generation;
+              processed.add(spouse.id);
             }
           }
-        } else if (personId == tempPerson) {
-          // Assign top ancestor to generation 0
-          generationAssignments[personId] = 0;
-          changed = true;
         }
       }
     }
 
     // Group units by generation
-    for (int i = 0; i < units.length; i++) {
-      final unit = units[i];
+    for (final unit in units) {
       final personId = unit.primaryPerson.id;
       final generation = generationAssignments[personId] ?? 0;
 
