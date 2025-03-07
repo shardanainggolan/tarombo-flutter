@@ -800,6 +800,10 @@ GraphEdgeData _$GraphEdgeDataFromJson(Map<String, dynamic> json) {
 /// @nodoc
 mixin _$GraphEdgeData {
   String get relationshipType => throw _privateConstructorUsedError;
+  DateTime? get marriageDate => throw _privateConstructorUsedError;
+  DateTime? get divorceDate => throw _privateConstructorUsedError;
+  bool? get isCurrentMarriage => throw _privateConstructorUsedError;
+  String? get marriageLocation => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -813,7 +817,12 @@ abstract class $GraphEdgeDataCopyWith<$Res> {
           GraphEdgeData value, $Res Function(GraphEdgeData) then) =
       _$GraphEdgeDataCopyWithImpl<$Res, GraphEdgeData>;
   @useResult
-  $Res call({String relationshipType});
+  $Res call(
+      {String relationshipType,
+      DateTime? marriageDate,
+      DateTime? divorceDate,
+      bool? isCurrentMarriage,
+      String? marriageLocation});
 }
 
 /// @nodoc
@@ -830,12 +839,32 @@ class _$GraphEdgeDataCopyWithImpl<$Res, $Val extends GraphEdgeData>
   @override
   $Res call({
     Object? relationshipType = null,
+    Object? marriageDate = freezed,
+    Object? divorceDate = freezed,
+    Object? isCurrentMarriage = freezed,
+    Object? marriageLocation = freezed,
   }) {
     return _then(_value.copyWith(
       relationshipType: null == relationshipType
           ? _value.relationshipType
           : relationshipType // ignore: cast_nullable_to_non_nullable
               as String,
+      marriageDate: freezed == marriageDate
+          ? _value.marriageDate
+          : marriageDate // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      divorceDate: freezed == divorceDate
+          ? _value.divorceDate
+          : divorceDate // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      isCurrentMarriage: freezed == isCurrentMarriage
+          ? _value.isCurrentMarriage
+          : isCurrentMarriage // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      marriageLocation: freezed == marriageLocation
+          ? _value.marriageLocation
+          : marriageLocation // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -848,7 +877,12 @@ abstract class _$$GraphEdgeDataImplCopyWith<$Res>
       __$$GraphEdgeDataImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String relationshipType});
+  $Res call(
+      {String relationshipType,
+      DateTime? marriageDate,
+      DateTime? divorceDate,
+      bool? isCurrentMarriage,
+      String? marriageLocation});
 }
 
 /// @nodoc
@@ -863,12 +897,32 @@ class __$$GraphEdgeDataImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? relationshipType = null,
+    Object? marriageDate = freezed,
+    Object? divorceDate = freezed,
+    Object? isCurrentMarriage = freezed,
+    Object? marriageLocation = freezed,
   }) {
     return _then(_$GraphEdgeDataImpl(
       relationshipType: null == relationshipType
           ? _value.relationshipType
           : relationshipType // ignore: cast_nullable_to_non_nullable
               as String,
+      marriageDate: freezed == marriageDate
+          ? _value.marriageDate
+          : marriageDate // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      divorceDate: freezed == divorceDate
+          ? _value.divorceDate
+          : divorceDate // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      isCurrentMarriage: freezed == isCurrentMarriage
+          ? _value.isCurrentMarriage
+          : isCurrentMarriage // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      marriageLocation: freezed == marriageLocation
+          ? _value.marriageLocation
+          : marriageLocation // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -876,17 +930,30 @@ class __$$GraphEdgeDataImplCopyWithImpl<$Res>
 /// @nodoc
 @JsonSerializable()
 class _$GraphEdgeDataImpl implements _GraphEdgeData {
-  const _$GraphEdgeDataImpl({required this.relationshipType});
+  const _$GraphEdgeDataImpl(
+      {required this.relationshipType,
+      this.marriageDate,
+      this.divorceDate,
+      this.isCurrentMarriage,
+      this.marriageLocation});
 
   factory _$GraphEdgeDataImpl.fromJson(Map<String, dynamic> json) =>
       _$$GraphEdgeDataImplFromJson(json);
 
   @override
   final String relationshipType;
+  @override
+  final DateTime? marriageDate;
+  @override
+  final DateTime? divorceDate;
+  @override
+  final bool? isCurrentMarriage;
+  @override
+  final String? marriageLocation;
 
   @override
   String toString() {
-    return 'GraphEdgeData(relationshipType: $relationshipType)';
+    return 'GraphEdgeData(relationshipType: $relationshipType, marriageDate: $marriageDate, divorceDate: $divorceDate, isCurrentMarriage: $isCurrentMarriage, marriageLocation: $marriageLocation)';
   }
 
   @override
@@ -895,12 +962,21 @@ class _$GraphEdgeDataImpl implements _GraphEdgeData {
         (other.runtimeType == runtimeType &&
             other is _$GraphEdgeDataImpl &&
             (identical(other.relationshipType, relationshipType) ||
-                other.relationshipType == relationshipType));
+                other.relationshipType == relationshipType) &&
+            (identical(other.marriageDate, marriageDate) ||
+                other.marriageDate == marriageDate) &&
+            (identical(other.divorceDate, divorceDate) ||
+                other.divorceDate == divorceDate) &&
+            (identical(other.isCurrentMarriage, isCurrentMarriage) ||
+                other.isCurrentMarriage == isCurrentMarriage) &&
+            (identical(other.marriageLocation, marriageLocation) ||
+                other.marriageLocation == marriageLocation));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, relationshipType);
+  int get hashCode => Object.hash(runtimeType, relationshipType, marriageDate,
+      divorceDate, isCurrentMarriage, marriageLocation);
 
   @JsonKey(ignore: true)
   @override
@@ -917,14 +993,26 @@ class _$GraphEdgeDataImpl implements _GraphEdgeData {
 }
 
 abstract class _GraphEdgeData implements GraphEdgeData {
-  const factory _GraphEdgeData({required final String relationshipType}) =
-      _$GraphEdgeDataImpl;
+  const factory _GraphEdgeData(
+      {required final String relationshipType,
+      final DateTime? marriageDate,
+      final DateTime? divorceDate,
+      final bool? isCurrentMarriage,
+      final String? marriageLocation}) = _$GraphEdgeDataImpl;
 
   factory _GraphEdgeData.fromJson(Map<String, dynamic> json) =
       _$GraphEdgeDataImpl.fromJson;
 
   @override
   String get relationshipType;
+  @override
+  DateTime? get marriageDate;
+  @override
+  DateTime? get divorceDate;
+  @override
+  bool? get isCurrentMarriage;
+  @override
+  String? get marriageLocation;
   @override
   @JsonKey(ignore: true)
   _$$GraphEdgeDataImplCopyWith<_$GraphEdgeDataImpl> get copyWith =>

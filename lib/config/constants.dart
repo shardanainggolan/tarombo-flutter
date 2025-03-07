@@ -1,8 +1,8 @@
 class AppConstants {
   // API Configuration
   // static const String apiBaseUrl = 'https://api.tarombo.com/api';
-  static const String apiBaseUrl = 'http://10.180.70.158:8000/api';
-  // static const String apiBaseUrl = 'http://192.168.215.80:8000/api';
+  // static const String apiBaseUrl = 'http://10.180.70.158:8000/api';
+  static const String apiBaseUrl = 'http://192.168.68.194:8000/api';
 
   // Endpoints
   static const String loginEndpoint = '/login';

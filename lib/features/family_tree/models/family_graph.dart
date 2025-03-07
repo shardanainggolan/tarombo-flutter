@@ -58,6 +58,10 @@ class GraphEdge with _$GraphEdge {
 class GraphEdgeData with _$GraphEdgeData {
   const factory GraphEdgeData({
     required String relationshipType,
+    DateTime? marriageDate,
+    DateTime? divorceDate,
+    bool? isCurrentMarriage,
+    String? marriageLocation,
   }) = _GraphEdgeData;
 
   factory GraphEdgeData.fromJson(Map<String, dynamic> json) =>

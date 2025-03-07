@@ -73,9 +73,21 @@ Map<String, dynamic> _$$GraphEdgeImplToJson(_$GraphEdgeImpl instance) =>
 _$GraphEdgeDataImpl _$$GraphEdgeDataImplFromJson(Map<String, dynamic> json) =>
     _$GraphEdgeDataImpl(
       relationshipType: json['relationshipType'] as String,
+      marriageDate: json['marriageDate'] == null
+          ? null
+          : DateTime.parse(json['marriageDate'] as String),
+      divorceDate: json['divorceDate'] == null
+          ? null
+          : DateTime.parse(json['divorceDate'] as String),
+      isCurrentMarriage: json['isCurrentMarriage'] as bool?,
+      marriageLocation: json['marriageLocation'] as String?,
     );
 
 Map<String, dynamic> _$$GraphEdgeDataImplToJson(_$GraphEdgeDataImpl instance) =>
     <String, dynamic>{
       'relationshipType': instance.relationshipType,
+      'marriageDate': instance.marriageDate?.toIso8601String(),
+      'divorceDate': instance.divorceDate?.toIso8601String(),
+      'isCurrentMarriage': instance.isCurrentMarriage,
+      'marriageLocation': instance.marriageLocation,
     };

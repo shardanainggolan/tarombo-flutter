@@ -1,12 +1,15 @@
+// lib/features/family_tree/widgets/unified_family_tree.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'dart:math' as math;
 import 'package:tarombo/features/family_tree/models/family_graph.dart';
 import 'package:tarombo/features/family_tree/providers/relationship_provider.dart';
+import 'package:tarombo/features/family_tree/widgets/family_tree_node.dart';
+import 'package:tarombo/features/family_tree/widgets/family_tree_connections.dart';
+import 'package:tarombo/features/family_tree/utils/family_tree_layout.dart';
+import 'package:tarombo/features/family_tree/widgets/marriage_box_widget.dart';
 
-/// A unified family tree visualization that ensures proper connected lines
-class UnifiedFamilyTree extends ConsumerWidget {
+class UnifiedFamilyTree extends ConsumerStatefulWidget {
   final FamilyGraph familyGraph;
   final TransformationController transformController;
   final int centralPersonId;
@@ -19,10 +22,70 @@ class UnifiedFamilyTree extends ConsumerWidget {
   }) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UnifiedFamilyTree> createState() => _UnifiedFamilyTreeState();
+}
+
+class _UnifiedFamilyTreeState extends ConsumerState<UnifiedFamilyTree> {
+  // Layout engine instance
+  late FamilyTreeLayout _layoutEngine;
+  // Node positions map
+  late Map<int, Offset> _nodePositions;
+  // Size of the tree
+  late Size _treeSize;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize and calculate layout
+    _calculateLayout();
+  }
+
+  @override
+  void didUpdateWidget(UnifiedFamilyTree oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Recalculate if graph or central person changes
+    if (widget.familyGraph != oldWidget.familyGraph ||
+        widget.centralPersonId != oldWidget.centralPersonId) {
+      _calculateLayout();
+    }
+  }
+
+  // Calculate the family tree layout
+  void _calculateLayout() {
+    _layoutEngine = FamilyTreeLayout();
+    _layoutEngine.calculateLayout(widget.familyGraph, widget.centralPersonId);
+    _nodePositions = _layoutEngine.nodePositions;
+    _treeSize = _layoutEngine.treeSize;
+
+    // Center on the central person after layout calculation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_nodePositions.containsKey(widget.centralPersonId)) {
+        _centerOnNode(widget.centralPersonId);
+      }
+    });
+  }
+
+  // Center the view on a specific node
+  void _centerOnNode(int nodeId) {
+    if (!_nodePositions.containsKey(nodeId)) return;
+
+    final nodePosition = _nodePositions[nodeId]!;
+    final nodeCenter = Offset(nodePosition.dx + FamilyTreeLayout.NODE_WIDTH / 2,
+        nodePosition.dy + FamilyTreeLayout.NODE_HEIGHT / 2);
+
+    // Calculate the translation needed to center this node
+    // This would need to account for the screen size, etc.
+    // For now, a simple reset to identity matrix as placeholder
+    widget.transformController.value = Matrix4.identity();
+
+    // Further implementation would adjust the matrix to center on the node
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // Fetch relationship data for the central person
     final relationshipsAsync =
-        ref.watch(allRelationshipsProvider(centralPersonId));
+        ref.watch(allRelationshipsProvider(widget.centralPersonId));
 
     // Get relationships data
     Map<int, String> relationshipTerms = {};
@@ -37,362 +100,81 @@ class UnifiedFamilyTree extends ConsumerWidget {
       }
     }
 
+    // Add debugging
+    print("Tree size: $_treeSize");
+    print("Number of nodes with positions: ${_nodePositions.length}");
+    print("Number of marriage groups: ${_layoutEngine.marriageGroups.length}");
+
     // Create a map for quick node lookup
     final Map<int, GraphNode> nodeMap = {};
-    for (final node in familyGraph.nodes) {
+    for (final node in widget.familyGraph.nodes) {
       nodeMap[node.id] = node;
     }
 
-    // Build family relationship maps
-    final Map<int, int> childToParent = _buildChildToParentMap(familyGraph);
-    final Map<int, List<int>> parentToChildren =
-        _buildParentToChildrenMap(familyGraph);
-    final Map<int, List<int>> personToSpouses = _buildSpouseMap(familyGraph);
-
-    // Find the top ancestor
-    final topAncestorId = _findTopAncestor(centralPersonId, childToParent);
-
     return InteractiveViewer(
-      transformationController: transformController,
+      transformationController: widget.transformController,
       constrained: false,
       boundaryMargin: const EdgeInsets.all(double.infinity),
       minScale: 0.1,
       maxScale: 2.0,
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          // Build a unified tree starting from top ancestor
-          child: _buildUnifiedTree(
-            context,
-            topAncestorId,
-            nodeMap,
-            childToParent,
-            parentToChildren,
-            personToSpouses,
-            relationshipTerms,
-            Set<int>(), // Track processed IDs to avoid duplicates
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Build a map of child to parent relationships
-  Map<int, int> _buildChildToParentMap(FamilyGraph familyGraph) {
-    final Map<int, int> childToParent = {};
-
-    for (final edge in familyGraph.edges) {
-      if (edge.data.relationshipType == 'father' ||
-          edge.data.relationshipType == 'mother') {
-        childToParent[edge.target] = edge.source;
-      }
-    }
-
-    return childToParent;
-  }
-
-  // Build a map of parent to children relationships
-  Map<int, List<int>> _buildParentToChildrenMap(FamilyGraph familyGraph) {
-    final Map<int, List<int>> parentToChildren = {};
-
-    for (final edge in familyGraph.edges) {
-      if (edge.data.relationshipType == 'father' ||
-          edge.data.relationshipType == 'mother') {
-        parentToChildren.putIfAbsent(edge.source, () => []).add(edge.target);
-      }
-    }
-
-    return parentToChildren;
-  }
-
-  // Build a map of person to spouses
-  Map<int, List<int>> _buildSpouseMap(FamilyGraph familyGraph) {
-    final Map<int, List<int>> personToSpouses = {};
-
-    for (final edge in familyGraph.edges) {
-      if (edge.data.relationshipType == 'spouse') {
-        personToSpouses.putIfAbsent(edge.source, () => []).add(edge.target);
-        personToSpouses.putIfAbsent(edge.target, () => []).add(edge.source);
-      }
-    }
-
-    return personToSpouses;
-  }
-
-  // Find the top ancestor starting from a person
-  int _findTopAncestor(int personId, Map<int, int> childToParent) {
-    int currentId = personId;
-    while (childToParent.containsKey(currentId)) {
-      currentId = childToParent[currentId]!;
-    }
-    return currentId;
-  }
-
-  // Build the entire family tree as a unified structure
-  Widget _buildUnifiedTree(
-    BuildContext context,
-    int personId,
-    Map<int, GraphNode> nodeMap,
-    Map<int, int> childToParent,
-    Map<int, List<int>> parentToChildren,
-    Map<int, List<int>> personToSpouses,
-    Map<int, String> relationshipTerms,
-    Set<int> processedIds,
-  ) {
-    // Skip if already processed
-    if (processedIds.contains(personId)) {
-      return Container();
-    }
-
-    // Mark as processed
-    processedIds.add(personId);
-
-    // Get the person node
-    final person = nodeMap[personId];
-    if (person == null) return Container();
-
-    // Get spouse(s)
-    final spouseIds = personToSpouses[personId] ?? [];
-    final children = parentToChildren[personId] ?? [];
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Person and spouse row
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Primary person
-            _buildPersonNode(
-              context,
-              person,
-              person.id == centralPersonId,
-              relationshipTerms,
-            ),
-
-            // First spouse (if any)
-            if (spouseIds.isNotEmpty &&
-                nodeMap.containsKey(spouseIds.first)) ...[
-              // Horizontal connector to spouse
-              Container(
-                width: 40,
-                height: 2,
-                color: Colors.red,
-              ),
-              _buildPersonNode(
-                context,
-                nodeMap[spouseIds.first]!,
-                spouseIds.first == centralPersonId,
-                relationshipTerms,
-              ),
-
-              // Mark spouse as processed
-              if (spouseIds.isNotEmpty)
-                Builder(builder: (context) {
-                  processedIds.add(spouseIds.first);
-                  return Container();
-                }),
-            ],
-          ],
-        ),
-
-        // Children section
-        if (children.isNotEmpty) ...[
-          // Vertical connector to children
-          Container(
-            width: 2,
-            height: 30,
-            color: Colors.black,
-          ),
-
-          // Build the children section
-          _buildChildrenSection(
-            context,
-            children,
-            nodeMap,
-            childToParent,
-            parentToChildren,
-            personToSpouses,
-            relationshipTerms,
-            processedIds,
-          ),
-        ],
-      ],
-    );
-  }
-
-  // Build a section containing all children with their own subtrees
-  Widget _buildChildrenSection(
-    BuildContext context,
-    List<int> childrenIds,
-    Map<int, GraphNode> nodeMap,
-    Map<int, int> childToParent,
-    Map<int, List<int>> parentToChildren,
-    Map<int, List<int>> personToSpouses,
-    Map<int, String> relationshipTerms,
-    Set<int> processedIds,
-  ) {
-    // Filter out any null nodes
-    final validChildrenIds =
-        childrenIds.where((id) => nodeMap.containsKey(id)).toList();
-
-    if (validChildrenIds.isEmpty) return Container();
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Horizontal line to connect all children
-        if (validChildrenIds.length > 1)
-          Container(
-            width: validChildrenIds.length * 200.0,
-            height: 2,
-            color: Colors.black,
-          ),
-
-        // Row of children with their subtrees
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final childId in validChildrenIds)
-              Container(
-                width: 200,
-                child: Column(
-                  children: [
-                    // Vertical connector to child
-                    if (validChildrenIds.length > 1)
-                      Container(
-                        width: 2,
-                        height: 20,
-                        color: Colors.black,
-                      ),
-
-                    // Child's subtree
-                    _buildUnifiedTree(
-                      context,
-                      childId,
-                      nodeMap,
-                      childToParent,
-                      parentToChildren,
-                      personToSpouses,
-                      relationshipTerms,
-                      processedIds,
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // Build a single person node
-  Widget _buildPersonNode(
-    BuildContext context,
-    GraphNode node,
-    bool isCentral,
-    Map<int, String> relationshipTerms,
-  ) {
-    // Determine gender-based styling
-    final gender = node.data.gender?.toLowerCase() ?? 'unknown';
-
-    final Color nodeColor = gender == 'male'
-        ? Colors.blue.shade100
-        : (gender == 'female' ? Colors.pink.shade100 : Colors.grey.shade200);
-
-    final Color borderColor = isCentral ? Colors.red : Colors.grey;
-
-    // Get relationship term for this person
-    final relationshipTerm = relationshipTerms[node.id];
-
-    return GestureDetector(
-      onTap: () {
-        GoRouter.of(context).go('/person/${node.id}');
-      },
       child: Container(
-        width: 120,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: nodeColor,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: borderColor,
-            width: isCentral ? 3 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 3,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
+        // Make container large enough to hold the entire tree
+        width: _treeSize.width + 100,
+        height: _treeSize.height + 100,
+        child: Stack(
           children: [
-            // Gender icon
-            Icon(
-              gender == 'male'
-                  ? Icons.male
-                  : (gender == 'female' ? Icons.female : Icons.person),
-              color: gender == 'male'
-                  ? Colors.blue.shade800
-                  : (gender == 'female'
-                      ? Colors.pink.shade800
-                      : Colors.grey.shade800),
-              size: 20,
-            ),
-            const SizedBox(height: 4),
-
-            // Person name
-            Text(
-              node.label ?? 'Unknown',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
+            // Bottom layer: connection lines using CustomPainter
+            CustomPaint(
+              size: _treeSize,
+              painter: FamilyTreeConnections(
+                familyGraph: widget.familyGraph,
+                nodePositions: _nodePositions,
+                marriageGroups: _layoutEngine.marriageGroups,
               ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
 
-            // Marga name
-            Text(
-              node.data.marga ?? '',
-              style: const TextStyle(
-                fontSize: 12,
-                fontStyle: FontStyle.italic,
-              ),
-              textAlign: TextAlign.center,
-            ),
-
-            // Relationship term (partuturan)
-            if (relationshipTerm != null && !isCentral) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.indigo.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  relationshipTerm,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.indigo,
-                  ),
-                  textAlign: TextAlign.center,
+            // Add a debugging layer to visualize bounds
+            ...List.generate(
+              10,
+              (i) => Positioned(
+                left: i * 100.0,
+                top: 0,
+                child: Container(
+                  width: 1,
+                  height: _treeSize.height,
+                  color: Colors.grey.withOpacity(0.2),
                 ),
               ),
-            ],
+            ),
 
-            // Star for central person
-            if (isCentral)
-              const Icon(Icons.star, color: Colors.amber, size: 16),
+            // Middle layer: marriage boxes
+            // Marriage boxes - must come before nodes to be behind them
+            ..._layoutEngine.marriageGroups
+                .where((mg) => mg.bounds != Rect.zero)
+                .map((marriageGroup) {
+              print(
+                  "Adding marriage box for persons ${marriageGroup.person1Id}-${marriageGroup.person2Id}");
+              return MarriageBoxWidget(
+                marriageGroup: marriageGroup,
+                nodeMap: nodeMap,
+              );
+            }).toList(),
+
+            // Top layer: person nodes
+            ...widget.familyGraph.nodes
+                .where((node) => _nodePositions.containsKey(node.id))
+                .map((node) {
+              final position = _nodePositions[node.id]!;
+              return Positioned(
+                left: position.dx,
+                top: position.dy,
+                child: FamilyTreeNode(
+                  node: node,
+                  isCentral: node.id == widget.centralPersonId,
+                  relationshipTerms: relationshipTerms,
+                ),
+              );
+            }).toList(),
           ],
         ),
       ),
